@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Pulse{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#004F9F" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            </div>
+            <div class="brand-text">
+                <div class="brand-title">Pulse</div>
+                <div class="brand-sub">PDLC / SDLC Optimization</div>
+            </div>
+        </div>
+        <hr class="divider">
+
+        <div class="sidebar-section">
+            <div class="section-label">Active Project</div>
+            <select class="sidebar-select" id="projectSelect">
+                <option>Pulse</option>
+            </select>
+        </div>
+        <hr class="divider">
+
+        <div class="sidebar-section">
+            <div class="section-label">Navigation</div>
+            <nav class="nav-list" id="navList">
+                <a href="/dashboard" class="nav-item {% if active_page == 'dashboard' %}active{% endif %}">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                    Dashboard
+                </a>
+                <a href="/incidents" class="nav-item {% if active_page == 'incidents' %}active{% endif %}">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    Incident Analysis
+                </a>
+                <a href="/documents" class="nav-item {% if active_page == 'documents' %}active{% endif %}">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    Document Review
+                </a>
+                <a href="/knowledge-base" class="nav-item {% if active_page == 'knowledge-base' %}active{% endif %}">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    Knowledge Base
+                </a>
+                <a href="/feedback" class="nav-item {% if active_page == 'feedback' %}active{% endif %}">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                    Feedback
+                </a>
+            </nav>
+        </div>
+        <hr class="divider">
+
+        <div class="sidebar-section">
+            <div class="section-label">Service Health</div>
+            <div class="health-item"><span class="health-dot online"></span>Cloud Run<span class="health-status">Connected</span></div>
+            <div class="health-item"><span class="health-dot online"></span>Gemini API<span class="health-status">Available</span></div>
+            <div class="health-item"><span class="health-dot online"></span>RAG Corpus<span class="health-status">Connected</span></div>
+            <div class="health-item"><span class="health-dot online"></span>BigQuery<span class="health-status">Connected</span></div>
+            <div class="health-item"><span class="health-dot online"></span>GitHub API<span class="health-status">Connected</span></div>
+        </div>
+
+        <hr class="divider">
+        <div class="sidebar-footer" id="sidebarFooter"></div>
+    </aside>
+
+    <!-- Toast container for notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Main content -->
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="/static/js/app.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

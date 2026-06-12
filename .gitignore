@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+/document-editor/
+/security-monitor/
+scc-poller/findings.yaml
+.env
+connector.env
+review_log.json
+
+
+# Generated DOCX output — uploaded to GCS, not committed
+output/
+pipeline/__pycache__/
+*_ProjectDocs_*/

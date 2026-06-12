@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}Welcome — Pulse{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <div class="hero-inner">
+        <div>
+            <h1 class="hero-title">Welcome to Pulse</h1>
+            <p class="hero-sub">Intelligent PDLC / SDLC Optimization &mdash; Automate, Analyze, Accelerate</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+            {% set online_total = health|selectattr('status','equalto','online')|list|length %}
+            {% if online_total == health|length %}
+            <span class="hero-badge">System Online</span>
+            {% elif online_total > 0 %}
+            <span class="hero-badge" style="background:var(--yellow);color:#333;">Degraded</span>
+            {% else %}
+            <span class="hero-badge" style="background:#e53e3e;color:#fff;">Offline</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Platform KPIs -->
+<div class="grid grid-4" style="margin-bottom:28px;">
+    <div class="kpi" style="--kc:var(--blue3)">
+        <div class="kpi-label">Platform</div>
+        <div class="kpi-value" style="font-size:1.3rem;">Google Cloud</div>
+        <div class="kpi-delta">Vertex AI + RAG</div>
+    </div>
+    <div class="kpi" style="--kc:var(--accent)">
+        <div class="kpi-label">AI Model</div>
+        <div class="kpi-value" style="font-size:1.3rem;">Gemini</div>
+        <div class="kpi-delta">Agent Engine</div>
+    </div>
+    <div class="kpi" style="--kc:var(--green)">
+        <div class="kpi-label">Status</div>
+        <div class="kpi-value" style="font-size:1.3rem;">{% if online_count == total_services %}Ready{% elif online_count > 0 %}Degraded{% else %}Offline{% endif %}</div>
+        <div class="kpi-delta">{{ online_count }}/{{ total_services }} services online</div>
+    </div>
+    <div class="kpi" style="--kc:#dc2626">
+        <div class="kpi-label">Agents</div>
+        <div class="kpi-value" style="font-size:1.3rem;">{{ online_count }} Active</div>
+        <div class="kpi-delta">Incident, Docs, RAG</div>
+    </div>
+</div>
+
+<!-- Feature cards -->
+<div class="sec-hdr">
+    <span class="sec-title">Key Capabilities</span>
+    <span class="sec-badge">What we offer</span>
+</div>
+<div class="grid grid-3" style="margin-bottom:28px;">
+    <div class="acard">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+            <div style="width:42px;height:42px;border-radius:10px;background:rgba(0,79,159,0.06);display:flex;align-items:center;justify-content:center;color:var(--blue2);">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </div>
+            <div>
+                <div class="acard-title" style="margin:0;">Incident Intelligence</div>
+                <div style="font-size:0.72rem;color:var(--dim);">AI Root-Cause Analysis</div>
+            </div>
+        </div>
+        <div class="acard-desc">Automatically diagnose production incidents, perform root-cause analysis, generate remediation steps, and produce post-mortems.</div>
+    </div>
+    <div class="acard">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+            <div style="width:42px;height:42px;border-radius:10px;background:rgba(247,219,40,0.1);display:flex;align-items:center;justify-content:center;color:#b8960c;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <div>
+                <div class="acard-title" style="margin:0;">Document Generation</div>
+                <div style="font-size:0.72rem;color:var(--dim);">Auto Sprint Docs</div>
+            </div>
+        </div>
+        <div class="acard-desc">Generate comprehensive project documentation — DOR, DOD, Architecture Diagrams, SOPs, and more — aligned to your SDLC stage.</div>
+    </div>
+    <div class="acard">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+            <div style="width:42px;height:42px;border-radius:10px;background:rgba(22,163,74,0.06);display:flex;align-items:center;justify-content:center;color:var(--green);">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+            <div>
+                <div class="acard-title" style="margin:0;">Knowledge Base Q&A</div>
+                <div style="font-size:0.72rem;color:var(--dim);">RAG-powered Search</div>
+            </div>
+        </div>
+        <div class="acard-desc">Query your entire project knowledge with natural language. Get instant answers with source references from your RAG corpus.</div>
+    </div>
+</div>
+
+<!-- About -->
+<div class="card" style="margin-bottom:28px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+        <div style="width:36px;height:36px;border-radius:8px;background:rgba(0,79,159,0.06);display:flex;align-items:center;justify-content:center;color:var(--blue2);">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        </div>
+        <h3 style="color:var(--text2);margin:0;font-size:1.05rem;font-weight:700;">About the Project</h3>
+    </div>
+    <p style="color:var(--text);line-height:1.7;font-size:0.9rem;margin:0;">
+        Pulse is a comprehensive assistant designed to monitor, analyze, and optimize your
+        entire Software and Product Development Lifecycle. By integrating deeply with your
+        repositories, incident tracking systems, and document stores, it provides real-time
+        proactive guidance, automated sprint documentation, and incident intelligence to
+        dramatically streamline developer workflows.
+    </p>
+</div>
+
+<div class="sec-hdr">
+    <span class="sec-title">Environment Setup</span>
+    <span class="sec-badge">Initialization</span>
+</div>
+
+{% if setup_done %}
+<div class="alert alert-success" style="margin-bottom:14px;">
+    Setup completed previously. You can re-run it or <a href="/dashboard" style="color:var(--green);font-weight:600;">Go to Dashboard &rarr;</a>
+</div>
+{% endif %}
+<div class="card">
+    <p style="color:var(--text);font-weight:600;margin:0 0 16px 0;">Is your initial setup completed?</p>
+
+    <div style="display:flex;gap:14px;flex-wrap:wrap;">
+        <a href="/dashboard" class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Yes, take me to the dashboard
+        </a>
+        <button class="btn btn-primary" id="beginSetupBtn" onclick="runSetup()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            {% if setup_done %}Re-run Setup{% else %}No &mdash; Begin Setup{% endif %}
+        </button>
+    </div>
+</div>
+
+<div id="setupProgress" style="display:none;margin-top:20px;">
+    <div class="card">
+        <div class="progress-container">
+            <div class="progress-text" id="setupText">Initializing...</div>
+            <div class="pb-bg"><div class="pb-fill animating" id="setupBar" style="width:0%"></div></div>
+        </div>
+        <div id="setupResult" style="margin-top:16px;"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function runSetup() {
+    const btn = document.getElementById('beginSetupBtn');
+    const prog = document.getElementById('setupProgress');
+    const bar = document.getElementById('setupBar');
+    const text = document.getElementById('setupText');
+    const result = document.getElementById('setupResult');
+
+    btn.disabled = true;
+    prog.style.display = 'block';
+
+    const steps = [
+        [10, 'Detecting project stage...'],
+        [25, 'Checking knowledge base for existing documents...'],
+        [40, 'Identifying stale/missing documents...'],
+        [60, 'Generating only needed documents...'],
+        [75, 'Uploading to pending review...'],
+        [85, 'Refreshing RAG corpus...'],
+        [95, 'Finalizing...'],
+    ];
+    for (const [pct, msg] of steps) {
+        bar.style.width = pct + '%';
+        text.textContent = msg;
+        await new Promise(r => setTimeout(r, 400));
+    }
+
+    try {
+        const resp = await fetch('/api/setup', {method: 'POST'});
+        const data = await resp.json();
+        bar.style.width = '100%';
+        bar.classList.remove('animating');
+        text.textContent = 'Setup Complete!';
+
+        if (data.errors && data.errors.length > 0) {
+            result.innerHTML = '<div class="alert alert-warn">Setup completed with some issues:<ul style="margin:8px 0 0 18px;">' +
+                data.errors.map(e => '<li>' + escapeHtml(e) + '</li>').join('') + '</ul></div>';
+        } else {
+            let msg = 'All pipeline steps completed successfully.';
+            if (data.results) {
+                const setupResults = data.results;
+                if (setupResults.kb_status) {
+                    msg = escapeHtml(setupResults.kb_status);
+                } else {
+                    const parts = [];
+                    if (setupResults.skipped_fresh && setupResults.skipped_fresh.length > 0) {
+                        parts.push('Skipped ' + setupResults.skipped_fresh.length + ' up-to-date doc(s)');
+                    }
+                    if (setupResults.docs_generated && setupResults.docs_generated.length > 0) {
+                        parts.push('Generated ' + setupResults.docs_generated.length + ' doc(s)');
+                    }
+                    if (parts.length > 0) msg = parts.join('. ') + '.';
+                }
+            }
+            result.innerHTML = '<div class="alert alert-success">' + msg + '</div>';
+            showToast('Setup complete! Redirecting...', 'success');
+        }
+        setTimeout(() => { window.location.href = '/dashboard'; }, 1500);
+    } catch (err) {
+        bar.style.width = '100%';
+        bar.classList.remove('animating');
+        text.textContent = 'Setup failed';
+        result.innerHTML = '<div class="alert alert-warn">Error: ' + escapeHtml(err.message) + '</div>';
+        btn.disabled = false;
+    }
+}
+</script>
+{% endblock %}

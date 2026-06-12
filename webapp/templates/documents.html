@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% set active_page = 'documents' %}
+{% block title %}Document Review — Pulse{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <div class="hero-inner">
+        <div>
+            <h1 class="hero-title">Document Review</h1>
+            <p class="hero-sub">Review, approve, and manage project documents for the knowledge base</p>
+        </div>
+        {% set online_total = health|selectattr('status','equalto','online')|list|length %}
+        {% if online_total == health|length %}
+        <span class="hero-badge">System Online</span>
+        {% elif online_total > 0 %}
+        <span class="hero-badge" style="background:var(--yellow);color:#333;">Degraded</span>
+        {% else %}
+        <span class="hero-badge" style="background:#e53e3e;color:#fff;">Offline</span>
+        {% endif %}
+    </div>
+</div>
+
+<!-- KPIs — values computed server-side -->
+<div class="grid grid-4">
+    <div class="kpi" style="--kc:var(--blue3)"><div class="kpi-label">Total Documents</div><div class="kpi-value" id="kpiTotal">{{ doc_total }}</div></div>
+    <div class="kpi" style="--kc:var(--amber)"><div class="kpi-label">Pending</div><div class="kpi-value" id="kpiPending">{{ doc_pending }}</div></div>
+    <div class="kpi" style="--kc:var(--green)"><div class="kpi-label">Approved</div><div class="kpi-value" id="kpiApproved">{{ doc_approved }}</div></div>
+    <div class="kpi" style="--kc:var(--red)"><div class="kpi-label">Denied</div><div class="kpi-value" id="kpiDenied">{{ doc_denied }}</div></div>
+</div>
+
+<div style="display:flex;gap:12px;align-items:center;margin:20px 0 16px 0;flex-wrap:wrap;">
+    <button class="btn" id="refreshBtn" onclick="refreshDocs()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="refreshIcon"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+        <span id="refreshText">Refresh from GCS</span>
+    </button>
+    <input type="text" class="form-input" id="docSearch" placeholder="Search documents..." style="flex:1;min-width:200px;margin-bottom:0;" oninput="filterDocs()">
+    <div class="tabs" style="margin-bottom:0;">
+        <button class="tab-btn active" onclick="filterByStatus(this,'all')">All</button>
+        <button class="tab-btn" onclick="filterByStatus(this,'pending')">Pending</button>
+        <button class="tab-btn" onclick="filterByStatus(this,'approved')">Approved</button>
+        <button class="tab-btn" onclick="filterByStatus(this,'denied')">Denied</button>
+    </div>
+</div>
+
+<!-- Document list / detail view -->
+<div class="sec-hdr">
+    <span class="sec-title">Project Documents</span>
+</div>
+
+<div id="docList" class="grid grid-4">
+    {% if not documents %}
+    <div style="grid-column:1/-1;">
+        <div class="alert alert-info">No documents found in the pending folder. Run setup or upload documents first.</div>
+    </div>
+    {% endif %}
+    {% for name, doc in documents.items() %}
+    {% set doc_status = review_log.get(doc.id, {}).get('status', 'pending') %}
+    <div class="doc-card" data-doc-id="{{ doc.id }}" data-doc-status="{{ doc_status }}" data-doc-name="{{ name|lower }}">
+        <div style="font-size:2.2rem;text-align:center;margin-bottom:4px;">{{ doc.icon }}</div>
+        <div style="font-weight:700;color:var(--text2);margin:6px 0 4px 0;text-align:center;font-size:0.9rem;">{{ name }}</div>
+        <div style="font-size:0.76rem;color:var(--muted);text-align:center;line-height:1.4;">{{ doc.description }}</div>
+        <div style="margin-top:10px;text-align:center;">
+            {% if doc_status == 'approved' %}
+            <span class="status-dot approved">&#128994; APPROVED</span>
+            {% elif doc_status == 'denied' %}
+            <span class="status-dot denied">&#128308; DENIED</span>
+            {% else %}
+            <span class="status-dot pending">&#128993; PENDING</span>
+            {% endif %}
+        </div>
+        <button class="btn btn-primary w-full" style="margin-top:14px;" onclick="viewDoc('{{ doc.id }}')">
+            {% if doc_status == 'pending' %}Review & Approve{% elif doc_status == 'approved' %}&#10004; Approved — View{% else %}&#10060; Denied — View{% endif %}
+        </button>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Detail view (hidden by default) -->
+<div id="docDetail" style="display:none;">
+    <button class="btn" onclick="backToList()" style="margin-bottom:16px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        Back to Documents
+    </button>
+
+    <div class="sec-hdr">
+        <span class="sec-title" id="detailTitle"></span>
+    </div>
+
+    <div id="detailStatus" style="margin:8px 0;"></div>
+    <div id="detailReviewInfo" style="margin-bottom:12px;"></div>
+
+    <div class="card" id="detailContent" style="line-height:1.7;color:var(--text);margin-bottom:20px;"></div>
+
+    <div id="reviewForm" class="card">
+        <div style="font-weight:700;color:var(--text2);margin-bottom:14px;font-size:0.95rem;">Submit Review</div>
+        <div class="grid grid-2" style="margin-bottom:12px;">
+            <div>
+                <label class="form-label">Your name (reviewer)</label>
+                <input type="text" class="form-input" id="reviewerName" placeholder="e.g. Priya Sharma">
+            </div>
+            <div>
+                <label class="form-label">Review comment (optional)</label>
+                <input type="text" class="form-input" id="reviewComment" placeholder="Add a note...">
+            </div>
+        </div>
+        <div class="grid grid-3">
+            <button class="btn btn-primary" id="btnApprove" onclick="reviewDoc('approved')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                Approve
+            </button>
+            <button class="btn btn-danger" id="btnDeny" onclick="reviewDoc('denied')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                Deny
+            </button>
+            <a class="btn" id="btnDownload" style="text-align:center;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download
+            </a>
+        </div>
+    </div>
+    <div id="reviewResult" style="margin-top:12px;"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentDocId = null;
+let activeStatusFilter = 'all';
+
+async function refreshDocs() {
+    const btn = document.getElementById('refreshBtn');
+    const icon = document.getElementById('refreshIcon');
+    const text = document.getElementById('refreshText');
+    btn.disabled = true;
+    text.textContent = 'Refreshing...';
+    icon.style.animation = 'spin 1s linear infinite';
+    try {
+        await fetch('/api/documents/refresh', {method:'POST'});
+        showToast('Documents refreshed from GCS', 'success');
+        setTimeout(() => location.reload(), 500);
+    } catch(e) {
+        showToast('Failed to refresh', 'error');
+        btn.disabled = false;
+        text.textContent = 'Refresh from GCS';
+        icon.style.animation = '';
+    }
+}
+
+function filterByStatus(btn, status) {
+    activeStatusFilter = status;
+    document.querySelectorAll('.tabs .tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    filterDocs();
+}
+
+function filterDocs() {
+    const query = (document.getElementById('docSearch').value || '').toLowerCase();
+    document.querySelectorAll('.doc-card').forEach(card => {
+        const name = card.getAttribute('data-doc-name') || '';
+        const status = card.getAttribute('data-doc-status') || '';
+        const matchSearch = !query || name.includes(query);
+        const matchStatus = activeStatusFilter === 'all' || status === activeStatusFilter;
+        card.style.display = (matchSearch && matchStatus) ? '' : 'none';
+    });
+}
+
+async function loadKPIs() {
+    try {
+        const resp = await fetch('/api/documents');
+        const docs = await resp.json();
+        const keys = Object.keys(docs);
+        let approved = 0, denied = 0;
+        keys.forEach(k => {
+            if (docs[k].review_status === 'approved') approved++;
+            else if (docs[k].review_status === 'denied') denied++;
+        });
+        document.getElementById('kpiTotal').textContent = keys.length;
+        document.getElementById('kpiApproved').textContent = approved;
+        document.getElementById('kpiDenied').textContent = denied;
+        document.getElementById('kpiPending').textContent = keys.length - approved - denied;
+    } catch(e) {}
+}
+loadKPIs();
+
+async function viewDoc(docId) {
+    currentDocId = docId;
+    try {
+        const resp = await fetch('/api/documents/' + encodeURIComponent(docId));
+        const doc = await resp.json();
+
+        document.getElementById('docList').style.display = 'none';
+        document.getElementById('docDetail').style.display = 'block';
+        document.getElementById('detailTitle').textContent = doc.icon + '  ' + doc.display_name;
+
+        // Status
+        const status = (doc.review && doc.review.status) || 'pending';
+        let statusHtml = '';
+        if (status === 'approved') {
+            statusHtml = '<div style="background:rgba(22,163,74,0.06);border-left:4px solid var(--green);color:var(--text);padding:12px 18px;border-radius:8px;">Status: <strong style="color:var(--green);">APPROVED</strong></div>';
+        } else if (status === 'denied') {
+            statusHtml = '<div style="background:rgba(220,38,38,0.06);border-left:4px solid var(--red);color:var(--text);padding:12px 18px;border-radius:8px;">Status: <strong style="color:var(--red);">DENIED</strong></div>';
+        } else {
+            statusHtml = '<div style="background:rgba(247,219,40,0.06);border-left:4px solid var(--amber);color:var(--text);padding:12px 18px;border-radius:8px;">Status: <strong style="color:#b8960c;">PENDING REVIEW</strong></div>';
+        }
+        document.getElementById('detailStatus').innerHTML = statusHtml;
+
+        // Review info
+        let infoHtml = '';
+        if (doc.review && doc.review.reviewed_by) {
+            infoHtml = '<div style="font-size:0.82rem;color:var(--muted);">Reviewed by <strong>' +
+                escapeHtml(doc.review.reviewed_by) + '</strong> on ' +
+                (doc.review.reviewed_at||'').substring(0,16).replace('T',' ') + '</div>';
+            if (doc.review.review_comment) {
+                infoHtml += '<div style="font-size:0.82rem;color:var(--muted);">Comment: ' + escapeHtml(doc.review.review_comment) + '</div>';
+            }
+        }
+        document.getElementById('detailReviewInfo').innerHTML = infoHtml;
+
+        // Content
+        if (doc.is_html) {
+            document.getElementById('detailContent').innerHTML = doc.content;
+        } else {
+            document.getElementById('detailContent').textContent = doc.content;
+        }
+
+        // Download link
+        document.getElementById('btnDownload').href = '/api/documents/' + encodeURIComponent(docId) + '/download';
+
+        // Disable buttons if already reviewed
+        const reviewed = (status === 'approved' || status === 'denied');
+        document.getElementById('btnApprove').disabled = reviewed;
+        document.getElementById('btnDeny').disabled = reviewed;
+
+    } catch(e) {
+        document.getElementById('docDetail').innerHTML = '<div class="alert alert-warn">Failed to load document.</div>';
+    }
+}
+
+function backToList() {
+    document.getElementById('docDetail').style.display = 'none';
+    document.getElementById('docList').style.display = 'grid';
+    document.getElementById('reviewResult').innerHTML = '';
+    currentDocId = null;
+}
+
+async function reviewDoc(action) {
+    const name = document.getElementById('reviewerName').value.trim();
+    if (!name) {
+        document.getElementById('reviewResult').innerHTML = '<div class="alert alert-warn">Please enter your name before reviewing.</div>';
+        return;
+    }
+    const comment = document.getElementById('reviewComment').value;
+    const fd = new FormData();
+    fd.append('action', action);
+    fd.append('reviewer_name', name);
+    fd.append('comment', comment);
+
+    const resp = await fetch('/api/documents/' + encodeURIComponent(currentDocId) + '/review', {method:'POST', body:fd});
+    const data = await resp.json();
+    if (data.success) {
+        var msg = action === 'approved'
+            ? 'Document approved.' + (data.gcs ? ' Uploaded to ' + escapeHtml(data.gcs) : '')
+            : 'Document denied.';
+        if (action === 'approved' && data.rag) {
+            msg += '<br><small>' + escapeHtml(data.rag) + '</small>';
+        }
+        document.getElementById('reviewResult').innerHTML = '<div class="alert alert-success">' + msg + '</div>';
+        document.getElementById('btnApprove').disabled = true;
+        document.getElementById('btnDeny').disabled = true;
+        showToast('Document ' + action + ' successfully', action === 'approved' ? 'success' : 'info');
+
+        // Update detail view status bar
+        var statusHtml = action === 'approved'
+            ? '<div style="background:rgba(22,163,74,0.06);border-left:4px solid var(--green);color:var(--text);padding:12px 18px;border-radius:8px;">Status: <strong style="color:var(--green);">APPROVED</strong></div>'
+            : '<div style="background:rgba(220,38,38,0.06);border-left:4px solid var(--red);color:var(--text);padding:12px 18px;border-radius:8px;">Status: <strong style="color:var(--red);">DENIED</strong></div>';
+        document.getElementById('detailStatus').innerHTML = statusHtml;
+
+        // Update the card in the list
+        var card = document.querySelector('.doc-card[data-doc-id="' + currentDocId + '"]');
+        if (card) {
+            card.setAttribute('data-doc-status', action);
+            var dot = card.querySelector('.status-dot');
+            if (dot) {
+                dot.className = 'status-dot ' + action;
+                dot.innerHTML = action === 'approved' ? '&#128994; APPROVED' : '&#128308; DENIED';
+            }
+            var cbtn = card.querySelector('.btn-primary');
+            if (cbtn) {
+                cbtn.innerHTML = action === 'approved' ? '&#10004; Approved &mdash; View' : '&#10060; Denied &mdash; View';
+            }
+        }
+
+        loadKPIs();
+    } else {
+        document.getElementById('reviewResult').innerHTML = '<div class="alert alert-warn">Review failed.</div>';
+    }
+}
+</script>
+{% endblock %}

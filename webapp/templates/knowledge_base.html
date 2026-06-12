@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% set active_page = 'knowledge-base' %}
+{% block title %}Knowledge Base — Pulse{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <div class="hero-inner">
+        <div>
+            <h1 class="hero-title">Knowledge Base</h1>
+            <p class="hero-sub">Chat with your project knowledge base &mdash; powered by Vertex AI RAG</p>
+        </div>
+        {% set online_total = health|selectattr('status','equalto','online')|list|length %}
+        {% if online_total == health|length %}
+        <span class="hero-badge">System Online</span>
+        {% elif online_total > 0 %}
+        <span class="hero-badge" style="background:var(--yellow);color:#333;">Degraded</span>
+        {% else %}
+        <span class="hero-badge" style="background:#e53e3e;color:#fff;">Offline</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="chat-layout">
+    <!-- Left: history -->
+    <div class="chat-history-panel">
+        <div class="section-label" style="margin-bottom:10px;">Chat History</div>
+        <button class="btn btn-primary w-full" style="margin-bottom:14px;" onclick="clearChat()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Chat
+        </button>
+        <hr class="divider">
+        <div id="chatSessionList" style="font-size:0.8rem;color:var(--dim);padding:12px 0;">
+            {% if messages %}
+            {% set ns = namespace(entry_count=0) %}
+            {% for msg in messages %}
+            {% if msg.role == 'user' %}
+            {% set ns.entry_count = ns.entry_count + 1 %}
+            <div style="padding:8px 10px;margin-bottom:4px;border-radius:6px;background:var(--surface2);cursor:default;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);" title="{{ msg.content }}">
+                💬 {{ msg.content[:40] }}{% if msg.content|length > 40 %}…{% endif %}
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% if ns.entry_count == 0 %}
+            No previous chats yet.
+            {% endif %}
+            {% else %}
+            No previous chats yet.
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Right: chat interface -->
+    <div class="chat-main-panel">
+        <div class="chat-messages" id="chatMessages">
+            {% if not messages %}
+            <div class="chat-welcome" id="chatWelcome">
+                <div style="margin-bottom:16px;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#004F9F" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                </div>
+                <div style="font-size:1.15rem;font-weight:700;color:var(--text2);margin-bottom:8px;">Ask your Knowledge Base</div>
+                <div style="font-size:0.85rem;color:var(--muted);max-width:420px;margin:0 auto;line-height:1.6;">
+                    Ask anything about your project. I'll search the RAG corpus and provide answers with source references.
+                </div>
+                <div style="margin-top:24px;">
+                    <div style="font-size:0.7rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">Try asking</div>
+                    <div class="grid grid-2" style="max-width:600px;margin:0 auto;">
+                        {% for q in [
+                            'Summarize the latest changes in the repository',
+                            'What SDLC documents exist in the knowledge base?',
+                            'Generate documentation for the current project stage',
+                            'What monitoring and alerting is configured in our repo?',
+                            'Review the CI/CD pipeline and suggest improvements',
+                            'What security best practices are documented in the knowledge base?'
+                        ] %}
+                        <button class="btn example-q" onclick="sendMessage(this.textContent)">{{ q }}</button>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            {% for msg in messages %}
+            <div class="chat-msg chat-msg-{{ msg.role }}">
+                {% if msg.role == 'assistant' %}
+                <div class="chat-msg-bubble markdown-body" data-raw-md="{{ msg.content|e }}"></div>
+                {% else %}
+                <div class="chat-msg-bubble">{{ msg.content }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+
+        <form class="chat-input-bar" onsubmit="return handleChatSubmit(event)">
+            <input type="text" class="form-input" id="chatInput" placeholder="Ask a question about your project..." autocomplete="off" style="flex:1;margin-bottom:0;">
+            <button type="submit" class="btn btn-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                Send
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function renderMarkdown(text) {
+    if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+        return DOMPurify.sanitize(marked.parse(text));
+    }
+    var el = document.createElement('span');
+    el.textContent = text;
+    return el.innerHTML;
+}
+
+// Render markdown for server-rendered assistant messages on page load
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.chat-msg-assistant .chat-msg-bubble[data-raw-md]').forEach(function(el) {
+        el.innerHTML = renderMarkdown(el.getAttribute('data-raw-md'));
+    });
+});
+
+async function sendMessage(text) {
+    if (!text || !text.trim()) return;
+    const container = document.getElementById('chatMessages');
+    const welcome = document.getElementById('chatWelcome');
+    if (welcome) welcome.style.display = 'none';
+
+    // Add entry to chat history sidebar
+    const sessionList = document.getElementById('chatSessionList');
+    // Remove the "No previous chats yet." placeholder if present
+    if (sessionList.children.length === 0 && sessionList.textContent.trim() === 'No previous chats yet.') {
+        sessionList.textContent = '';
+    }
+    const historyEntry = document.createElement('div');
+    historyEntry.style.cssText = 'padding:8px 10px;margin-bottom:4px;border-radius:6px;background:var(--surface2);cursor:default;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);';
+    const label = text.length > 40 ? text.substring(0, 40) + '…' : text;
+    historyEntry.textContent = '💬 ' + label;
+    historyEntry.title = text;
+    sessionList.appendChild(historyEntry);
+
+    // User bubble
+    const userDiv = document.createElement('div');
+    userDiv.className = 'chat-msg chat-msg-user';
+    userDiv.innerHTML = '<div class="chat-msg-bubble">' + escapeHtml(text) + '</div>';
+    container.appendChild(userDiv);
+    container.scrollTop = container.scrollHeight;
+
+    // Thinking indicator with animated dots
+    const thinkDiv = document.createElement('div');
+    thinkDiv.className = 'chat-msg chat-msg-assistant';
+    thinkDiv.innerHTML = '<div class="chat-msg-bubble markdown-body"><span class="typing-dots"><span>.</span><span>.</span><span>.</span></span> Thinking</div>';
+    container.appendChild(thinkDiv);
+    container.scrollTop = container.scrollHeight;
+
+    try {
+        const fd = new FormData();
+        fd.append('query', text);
+        const resp = await fetch('/api/chat', {method:'POST', body:fd});
+        const data = await resp.json();
+
+        const bubble = thinkDiv.querySelector('.chat-msg-bubble');
+        bubble.innerHTML = renderMarkdown(data.response || 'No response.');
+        if (data.error) {
+            bubble.style.color = 'var(--blue5)';
+        }
+    } catch(err) {
+        thinkDiv.querySelector('.chat-msg-bubble').textContent = 'Error: ' + err.message;
+    }
+    container.scrollTop = container.scrollHeight;
+}
+
+function handleChatSubmit(e) {
+    e.preventDefault();
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if (text) {
+        sendMessage(text);
+        input.value = '';
+    }
+    return false;
+}
+
+async function clearChat() {
+    await fetch('/api/chat/history', {method:'DELETE'});
+    location.reload();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,7 @@
+requests
+PyYAML
+google-auth
+google-auth-httplib2
+google-auth-oauthlib
+google-cloud-storage
+google-cloud-aiplatform>=1.133.0

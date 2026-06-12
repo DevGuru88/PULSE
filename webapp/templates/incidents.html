@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+{% set active_page = 'incidents' %}
+{% block title %}Incident Analysis — Pulse{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <div class="hero-inner">
+        <div>
+            <h1 class="hero-title">Incident Analysis</h1>
+            <span class="hero-sub">AI-powered diagnostics, root-cause analysis, and incident intelligence</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+            {% if data_source == 'gcp' %}
+            <span class="hero-badge" style="background:var(--green);color:#fff;">Live GCP Data</span>
+            {% else %}
+            <span class="hero-badge" style="background:var(--amber);color:#333;">Demo Data</span>
+            {% endif %}
+            <button onclick="refreshIncidents()" class="btn btn-sm" style="padding:4px 12px;font-size:11px;" title="Re-fetch from GCP">&#x21bb; Refresh</button>
+            {% set online_total = health|selectattr('status','equalto','online')|list|length %}
+            {% if online_total == health|length %}
+            <span class="hero-badge">System Online</span>
+            {% elif online_total > 0 %}
+            <span class="hero-badge" style="background:var(--yellow);color:#333;">Degraded</span>
+            {% else %}
+            <span class="hero-badge" style="background:#e53e3e;color:#fff;">Offline</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- KPIs -->
+<div class="grid grid-4">
+    <div class="kpi" style="--kc:var(--amber)">
+        <div class="kpi-label">Open Incidents</div>
+        <div class="kpi-value counter-animate" id="kpiOpen" data-target="{{ open_count }}">0</div>
+        <div class="kpi-delta" id="kpiOpenDelta" style="color:{% if open_count > 0 %}#dc2626{% else %}var(--green){% endif %};">{% if open_count > 0 %}{{ open_count }} need{{ 's' if open_count != 1 else '' }} attention{% else %}&#10003; All resolved{% endif %}</div>
+    </div>
+    <div class="kpi" style="--kc:var(--green)">
+        <div class="kpi-label">Resolved</div>
+        <div class="kpi-value counter-animate" id="kpiResolved" data-target="{{ resolved_count }}">0</div>
+        <div class="kpi-delta" id="kpiResolvedDelta" style="color:var(--green);">{{ resolution_pct }}% resolution rate</div>
+    </div>
+    <div class="kpi" style="--kc:#dc2626">
+        <div class="kpi-label">Critical</div>
+        <div class="kpi-value counter-animate" id="kpiCritical" data-target="{{ critical_count }}">0</div>
+        <div class="kpi-delta" id="kpiCriticalDelta" style="color:{% if critical_count > 0 %}#dc2626{% else %}var(--green){% endif %};">{% if critical_count > 0 %}{{ critical_count }} high priority{% else %}&#10003; No critical{% endif %}</div>
+    </div>
+    <div class="kpi" style="--kc:var(--blue3)">
+        <div class="kpi-label">Avg MTTR</div>
+        <div class="kpi-value" id="kpiMTTR">{{ avg_mttr }}m</div>
+        <div class="kpi-delta" id="kpiMTTRDelta">{{ incidents|length }} incident{{ 's' if incidents|length != 1 else '' }} tracked</div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="sec-hdr">
+    <span class="sec-title">Incident Analytics</span>
+    <span class="sec-badge">Distribution</span>
+</div>
+<div class="grid grid-2">
+    <div class="card"><div id="chartCategory"></div></div>
+    <div class="card"><div id="chartSeverity"></div></div>
+</div>
+<div class="card" style="margin-top:4px;"><div id="chartMTTR"></div></div>
+
+<!-- Table -->
+<div class="sec-hdr">
+    <span class="sec-title">Incident History</span>
+    <span class="sec-badge">{{ incidents|length }} total</span>
+</div>
+
+<!-- Search & Filter -->
+<div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
+    <input type="text" class="form-input" id="incidentSearch" placeholder="Search incidents..." style="flex:1;min-width:200px;margin-bottom:0;" oninput="filterIncidents()">
+    <div class="tabs" style="margin-bottom:0;">
+        <button class="tab-btn active" onclick="filterBySev(this,'all')">All</button>
+        <button class="tab-btn" onclick="filterBySev(this,'critical')">Critical</button>
+        <button class="tab-btn" onclick="filterBySev(this,'high')">High</button>
+        <button class="tab-btn" onclick="filterBySev(this,'medium')">Medium</button>
+        <button class="tab-btn" onclick="filterBySev(this,'low')">Low</button>
+    </div>
+</div>
+<div class="table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Incident No</th>
+                <th>Category</th>
+                <th>Severity</th>
+                <th>Status</th>
+                <th>MTTR (min)</th>
+                <th>Opened</th>
+            </tr>
+        </thead>
+        <tbody id="incidentTableBody">
+            {% for inc in incidents %}
+            <tr data-severity="{{ inc.severity }}">
+                <td style="font-weight:600;color:var(--text2);">{{ inc.id }}</td>
+                <td>{{ inc.alert }}</td>
+                <td><span class="severity-badge severity-{{ inc.severity }}">{{ inc.severity }}</span></td>
+                <td>{{ inc.status }}</td>
+                <td>{{ inc.mttr_min }}</td>
+                <td style="color:var(--dim);">{{ inc.opened_at[:16].replace('T',' ') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const INCIDENTS = {{ incidents | tojson }};
+const SEV_COLORS = {critical:'#dc2626',high:'#b8960c',medium:'#004F9F',low:'#16a34a'};
+let activeSevFilter = 'all';
+
+// Animated counters
+function animateCounter(el, target) {
+    const start = performance.now();
+    (function tick(now) {
+        const p = Math.min((now - start) / 1200, 1);
+        el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3)));
+        if (p < 1) requestAnimationFrame(tick);
+    })(start);
+}
+document.querySelectorAll('[data-target]').forEach(el => {
+    animateCounter(el, parseInt(el.dataset.target) || 0);
+});
+
+// Recompute KPIs from INCIDENTS array
+function refreshKPIs() {
+    const openCount = INCIDENTS.filter(i => i.status === 'open' || i.status === 'investigating').length;
+    const resolvedCount = INCIDENTS.filter(i => i.status === 'resolved').length;
+    const criticalCount = INCIDENTS.filter(i => i.severity === 'critical').length;
+    const mttrVals = INCIDENTS.filter(i => i.mttr_min).map(i => i.mttr_min);
+    const avgMttr = mttrVals.length ? Math.round(mttrVals.reduce((a,b) => a+b, 0) / mttrVals.length) : 0;
+    const resPct = INCIDENTS.length ? Math.round(resolvedCount / INCIDENTS.length * 100) : 0;
+
+    const elOpen = document.getElementById('kpiOpen');
+    elOpen.dataset.target = openCount;
+    animateCounter(elOpen, openCount);
+    const elOpenD = document.getElementById('kpiOpenDelta');
+    if (openCount > 0) {
+        elOpenD.style.color = '#dc2626';
+        elOpenD.textContent = openCount + ' need' + (openCount !== 1 ? 's' : '') + ' attention';
+    } else {
+        elOpenD.style.color = 'var(--green)';
+        elOpenD.innerHTML = '&#10003; All resolved';
+    }
+
+    const elRes = document.getElementById('kpiResolved');
+    elRes.dataset.target = resolvedCount;
+    animateCounter(elRes, resolvedCount);
+    document.getElementById('kpiResolvedDelta').textContent = resPct + '% resolution rate';
+
+    const elCrit = document.getElementById('kpiCritical');
+    elCrit.dataset.target = criticalCount;
+    animateCounter(elCrit, criticalCount);
+    const elCritD = document.getElementById('kpiCriticalDelta');
+    if (criticalCount > 0) {
+        elCritD.style.color = '#dc2626';
+        elCritD.textContent = criticalCount + ' high priority';
+    } else {
+        elCritD.style.color = 'var(--green)';
+        elCritD.innerHTML = '&#10003; No critical';
+    }
+
+    document.getElementById('kpiMTTR').textContent = avgMttr + 'm';
+    document.getElementById('kpiMTTRDelta').textContent = INCIDENTS.length + ' incident' + (INCIDENTS.length !== 1 ? 's' : '') + ' tracked';
+
+    // Update header badge count
+    const badge = document.querySelector('.sec-badge');
+    if (badge) badge.textContent = INCIDENTS.length + ' total';
+}
+
+// Render charts from INCIDENTS array
+function renderCharts() {
+    // Category donut
+    const catCounts = {};
+    INCIDENTS.forEach(i => { catCounts[i.alert] = (catCounts[i.alert]||0)+1; });
+    Plotly.react('chartCategory', [{
+        labels: Object.keys(catCounts), values: Object.values(catCounts),
+        type:'pie', hole:0.65,
+        marker:{colors:['#004F9F','#003A75','#3385BF','#80B3D9','#f7db28','#e4e8ee'],
+                line:{color:'#ffffff',width:2}},
+        textinfo:'percent',
+        textfont:{color:'#374151',size:11}
+    }], Object.assign({}, chartLayout('Category of Incidents'), {showlegend:true,
+        legend:{bgcolor:'rgba(0,0,0,0)',font:{color:'#6b7280',size:9},orientation:'v',yanchor:'middle',y:0.5,xanchor:'left',x:1.02}}), {displayModeBar:false});
+
+    // Severity donut
+    const sevCounts = {};
+    INCIDENTS.forEach(i => { sevCounts[i.severity] = (sevCounts[i.severity]||0)+1; });
+    const sevLabels = Object.keys(sevCounts);
+    Plotly.react('chartSeverity', [{
+        labels: sevLabels, values: Object.values(sevCounts),
+        type:'pie', hole:0.65,
+        marker:{colors: sevLabels.map(s=>SEV_COLORS[s]||'#5C7A9E'),
+                line:{color:'#ffffff',width:2}},
+        textinfo:'percent',
+        textfont:{color:'#374151',size:11}
+    }], Object.assign({}, chartLayout('Severity Distribution'), {showlegend:true,
+        legend:{bgcolor:'rgba(0,0,0,0)',font:{color:'#6b7280',size:10},orientation:'v',yanchor:'middle',y:0.5,xanchor:'left',x:1.02}}), {displayModeBar:false});
+
+    // MTTR bar
+    Plotly.react('chartMTTR', [{
+        x: INCIDENTS.map(i=>i.id), y: INCIDENTS.map(i=>i.mttr_min),
+        type:'bar',
+        marker:{color: INCIDENTS.map(i=>SEV_COLORS[i.severity]||'#6b7280'),
+                line:{color:'rgba(0,0,0,0.05)',width:1}},
+        text: INCIDENTS.map(i=>i.mttr_min+'m'), textposition:'outside',
+        textfont:{color:'#6b7280',size:10}
+    }], Object.assign({}, chartLayout('MTTR by Incident'), {margin:{l:40,r:14,t:56,b:50}, xaxis: Object.assign({}, chartLayout().xaxis, {tickangle:-25}),
+         yaxis: Object.assign({}, chartLayout().yaxis, {title:'Minutes'})}), {displayModeBar:false});
+}
+
+// Initial render
+renderCharts();
+
+// Filter by severity
+function filterBySev(btn, sev) {
+    activeSevFilter = sev;
+    document.querySelectorAll('.tabs .tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    filterIncidents();
+}
+
+function filterIncidents() {
+    const query = (document.getElementById('incidentSearch').value || '').toLowerCase();
+    const rows = document.querySelectorAll('#incidentTableBody tr');
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        const sev = row.getAttribute('data-severity') || '';
+        const matchSearch = !query || text.includes(query);
+        const matchSev = activeSevFilter === 'all' || sev === activeSevFilter;
+        row.style.display = (matchSearch && matchSev) ? '' : 'none';
+    });
+}
+
+async function triggerIncident(e) {
+    e.preventDefault();
+    const form = e.target;
+    const fd = new FormData(form);
+    const res = await fetch('/api/incidents/trigger', {method:'POST', body:fd});
+    const inc = await res.json();
+    document.getElementById('incidentResult').innerHTML =
+        '<div class="alert alert-success">Incident ' + escapeHtml(inc.id) + ' created (severity: ' + escapeHtml(inc.severity) + ', MTTR: ' + inc.mttr_min + 'm)</div>';
+    showToast('Incident ' + inc.id + ' triggered successfully', 'success');
+
+    // Update INCIDENTS array
+    INCIDENTS.unshift(inc);
+
+    // Add row to table
+    const tbody = document.getElementById('incidentTableBody');
+    const tr = document.createElement('tr');
+    tr.setAttribute('data-severity', inc.severity);
+    tr.innerHTML = '<td style="font-weight:600;color:var(--text2);">'+escapeHtml(inc.id)+'</td><td>'+escapeHtml(inc.alert)+'</td>'
+        +'<td><span class="severity-badge severity-'+escapeHtml(inc.severity)+'">'+escapeHtml(inc.severity)+'</span></td>'
+        +'<td>'+escapeHtml(inc.status)+'</td><td>'+inc.mttr_min+'</td>'
+        +'<td style="color:var(--dim);">'+inc.opened_at.substring(0,16).replace('T',' ')+'</td>';
+    tr.style.animation = 'fadeInUp 0.3s ease';
+    tbody.insertBefore(tr, tbody.firstChild);
+
+    // Refresh KPIs and charts
+    refreshKPIs();
+    renderCharts();
+}
+
+// Refresh incidents from GCP
+async function refreshIncidents() {
+    showToast('Fetching incidents from GCP...', 'info');
+    try {
+        const res = await fetch('/api/incidents/refresh', {method:'POST'});
+        const data = await res.json();
+        // Reload full incident list
+        const listRes = await fetch('/api/incidents');
+        const newIncs = await listRes.json();
+        INCIDENTS.length = 0;
+        newIncs.forEach(i => INCIDENTS.push(i));
+        // Rebuild table
+        const tbody = document.getElementById('incidentTableBody');
+        tbody.innerHTML = '';
+        INCIDENTS.forEach(inc => {
+            const tr = document.createElement('tr');
+            tr.setAttribute('data-severity', inc.severity);
+            tr.innerHTML = '<td style="font-weight:600;color:var(--text2);">'+escapeHtml(inc.id)+'</td>'
+                +'<td>'+escapeHtml(inc.alert)+'</td>'
+                +'<td><span class="severity-badge severity-'+escapeHtml(inc.severity)+'">'+escapeHtml(inc.severity)+'</span></td>'
+                +'<td>'+escapeHtml(inc.status)+'</td>'
+                +'<td>'+(inc.mttr_min||0)+'</td>'
+                +'<td style="color:var(--dim);">'+(inc.opened_at||'').substring(0,16).replace('T',' ')+'</td>';
+            tbody.appendChild(tr);
+        });
+        refreshKPIs();
+        renderCharts();
+        showToast('Loaded ' + data.count + ' incidents (source: ' + data.source + ')', data.source === 'gcp' ? 'success' : 'info');
+    } catch (err) {
+        showToast('Failed to refresh: ' + err.message, 'error');
+    }
+}
+</script>
+{% endblock %}
